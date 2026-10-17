@@ -10,6 +10,10 @@
 # This replaces the hand dance:
 #   crabslandlogin -> crabslanddeploy -> ssh neuraprodnew -> cldeploy
 #
+# The same script runs in CI (.github/workflows/deploy.yml). There is no .env
+# on a runner, so DOCKER_LOGIN_TOKEN is read from the environment instead, and
+# CRABSLAND_BUILD_ARGS carries extra buildx flags (the gha layer cache).
+#
 # The docs ship inside the image. src/docker/Dockerfile copies the committed
 # docs/book into nginx, so rebuild the book locally (--docs) whenever the docs
 # changed. og_previews.py needs macOS Chrome and sips, so it can only run on
@@ -38,7 +42,7 @@ while [ $# -gt 0 ]; do
         --docs) DOCS=1 ;;
         --skip-build) BUILD=0 ;;
         --dry-run) DRY_RUN=1 ;;
-        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
         *) echo "deploy: unknown option '$1'" >&2; exit 2 ;;
     esac
     shift
@@ -61,7 +65,6 @@ step "Preflight"
 for bin in docker ssh curl; do
     command -v "$bin" >/dev/null || { echo "deploy: $bin is not on PATH" >&2; exit 1; }
 done
-[ -f .env ] || { echo "deploy: .env is missing, DOCKER_LOGIN_TOKEN lives there" >&2; exit 1; }
 [ -f "$DOCKERFILE" ] || { echo "deploy: $DOCKERFILE is missing" >&2; exit 1; }
 echo "repo:   $REPO_ROOT"
 echo "commit: $(git rev-parse --short HEAD) $(git log -1 --pretty=%s)"
@@ -76,20 +79,23 @@ if [ "$DOCS" = 1 ]; then
 fi
 
 step "Docker Hub login as $REGISTRY_USER"
-set -a
-# shellcheck disable=SC1091
-. ./.env
-set +a
-[ -n "${DOCKER_LOGIN_TOKEN:-}" ] || { echo "deploy: DOCKER_LOGIN_TOKEN is empty in .env" >&2; exit 1; }
+# Locally the token lives in .env; in CI it arrives through the environment.
+if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . ./.env
+    set +a
+fi
+[ -n "${DOCKER_LOGIN_TOKEN:-}" ] || { echo "deploy: DOCKER_LOGIN_TOKEN is missing (set it in .env or the environment)" >&2; exit 1; }
 if [ "$DRY_RUN" = 0 ]; then
     printf '%s' "$DOCKER_LOGIN_TOKEN" | docker login -u "$REGISTRY_USER" --password-stdin
 else
-    echo "+ docker login -u $REGISTRY_USER --password-stdin  (token from .env)"
+    echo "+ docker login -u $REGISTRY_USER --password-stdin  (token from .env or the environment)"
 fi
 
 if [ "$BUILD" = 1 ]; then
     step "Building and pushing $IMAGE for linux/amd64"
-    run "docker buildx build --platform linux/amd64 --provenance=false --push -t $IMAGE -f $DOCKERFILE ."
+    run "docker buildx build --platform linux/amd64 --provenance=false --push -t $IMAGE -f $DOCKERFILE ${CRABSLAND_BUILD_ARGS:-} ."
 else
     step "Skipping the build, deploying $IMAGE as it sits on Docker Hub"
 fi

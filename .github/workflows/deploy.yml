@@ -1,0 +1,73 @@
+name: Deploy
+
+# Build the landing image, push it to Docker Hub and roll prod, without a laptop.
+# The steps live in scripts/deploy.sh so a local run and a CI run cannot drift.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two pushes in a row queue up instead of racing each other on the same host.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The image ships the committed docs/book. A docs source change that did
+      # not rebuild the book would go live as the previous book, silently.
+      - name: Warn on a stale docs book
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          changed="$(git diff --name-only "$BEFORE" "$AFTER" || true)"
+          sources="$(printf '%s\n' "$changed" | grep -E '^docs/(src/|po/|book\.toml|scripts/)' || true)"
+          book="$(printf '%s\n' "$changed" | grep -E '^docs/book/' || true)"
+          if [ -n "$sources" ] && [ -z "$book" ]; then
+            echo "::warning title=Stale docs book::docs sources changed without a docs/book rebuild, so the image serves the previous book. Run bash docs/build-all.sh and commit docs/book."
+          fi
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure SSH for neuraprodnew
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'EOF'
+          Host neuraprodnew
+            HostName 178.104.248.56
+            User root
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh -o BatchMode=yes neuraprodnew true
+
+      - name: Deploy
+        env:
+          DOCKER_LOGIN_TOKEN: ${{ secrets.DOCKER_LOGIN_TOKEN }}
+          CRABSLAND_BUILD_ARGS: --cache-from=type=gha --cache-to=type=gha,mode=max
+        run: scripts/deploy.sh
