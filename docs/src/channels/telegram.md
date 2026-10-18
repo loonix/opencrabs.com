@@ -145,6 +145,7 @@ bot_owner = ["123456789"]             # owner IDs (gated commands, /cd hidden di
 | `rich_messages` | `true` (since v0.3.64) | Send structured replies as native Telegram rich messages (tables, headings, lists, math). Requires current mobile/desktop Telegram clients. Telegram Web and older clients show a "not supported" placeholder. Toggle via the onboarding checkbox or config |
 | `silence_group_start` | `true` | Silently ignore /start from non-allowed users in group chats. Users who need their ID can DM the bot |
 | `bot_owner` | `[]` (first allowed_user) | Bot owner user IDs. Owners can access gated commands (/profiles, hidden files in /cd), manage profiles. Defaults to first entry in `allowed_users` |
+| `guest_queries` | `false` | Answer Telegram Guest Mode tags: someone tags the bot in a chat it is not a member of and gets one reply there. Callers must be the owner, an admin, or listed for that chat. See [Guest queries](#guest-queries) |
 
 ## Per-group access control (per-chat ACL)
 
@@ -180,6 +181,29 @@ open = true                              # all members can talk, no per-user reg
 ```
 
 Use this for public/community groups where you want the bot available to everyone. Members still can't DM the bot unless they're in the global `allowed_users` or `bot_owner`.
+
+## Guest queries
+
+Telegram Guest Mode (Bot API 10.0) lets someone tag `@yourbot` in a chat the bot is **not** a member of. With `guest_queries = true`, OpenCrabs answers the tag right there using the API method `answerGuestQuery`.
+
+```toml
+[channels.telegram]
+guest_queries = true                     # default false: guest tags are ignored
+allowed_users = ["111"]                  # admins: answered anywhere
+[channels.telegram.groups.-1001234567890]
+allowed_users = ["222"]                  # this user is answered in this chat only
+```
+
+Default is off, and the gate is narrow once it is on. The caller must be the `bot_owner`, an admin (`allowed_users`), or listed for **that** chat. A group's `open = true` grants nothing here: it opens that group to the bot, it does not authorize answering guest tags from its members. Refused queries are logged with the `guest_query_id`, the caller, and the chat.
+
+Boundaries of a guest turn:
+
+- The bot sees only the tagged message, no history from that chat, and nothing from the guest turn is stored in that chat's history.
+- The reply is one plain-text message, clamped to Telegram's 4096-character limit. An overlong reply is cut and marked `[truncated]` rather than dropped.
+- Channel directives (`<<...>>`) are stripped, so a local file path can never leak into someone else's chat.
+- Tools that need approval are denied for guest turns: approvals are buttons in a chat, and the caller is not the machine's owner.
+
+Because the pinned `teloxide-core` has no guest update variant, guest queries are read on the raw `getUpdates` layer, and `guest_message` is in the bot's `allowed_updates` list. Nothing to configure for that; it is on whenever the channel runs.
 
 ## Voice and file pickup in groups
 
