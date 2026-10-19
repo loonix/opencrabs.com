@@ -398,6 +398,39 @@
   <div id="status">Detecting your system...</div>
   <div class="grid" id="picks"></div>
   <p class="muted">Every release also ships a <a id="sha-link" href="#">SHA256SUMS</a> file for verification.</p>
+  <div id="oneline" style="margin:28px auto 0;max-width:760px;text-align:left">
+    <h2 style="margin:0 0 8px">One-line install (Linux and macOS)</h2>
+    <p class="muted" style="margin:0 0 12px">Picks the right build for this machine, verifies it against the release SHA256SUMS, and installs <code>opencrabs</code> and <code>rtk</code> to <code>/usr/local/bin</code>, or <code>~/.local/bin</code> when that is not writable. Add <code>--dry-run</code> to see the plan without installing.</p>
+    <div style="display:flex;align-items:center;gap:10px;background:#12121c;border:1px solid #1e1e2e;border-radius:10px;padding:14px 16px">
+      <code id="oneline-code" style="flex:1;overflow-x:auto;white-space:nowrap;color:#e8e8ef">curl -fsSL https://opencrabs.com/install.sh | bash</code>
+      <button type="button" id="oneline-copy" aria-label="Copy the install command" style="flex:0 0 auto;background:#181826;color:#e8e8ef;border:1px solid #1e1e2e;border-radius:8px;padding:6px 12px;cursor:pointer">Copy</button>
+    </div>
+    <p class="muted" style="margin:10px 0 0">Then run <code>opencrabs</code>. Windows: use the download below.</p>
+  </div>
+  <script>
+  (function () {
+    var btn = document.getElementById("oneline-copy");
+    var code = document.getElementById("oneline-code");
+    if (!btn || !code) return;
+    btn.addEventListener("click", function () {
+      var text = code.textContent;
+      var done = function () {
+        btn.textContent = "Copied";
+        setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } else {
+        var r = document.createRange();
+        r.selectNodeContents(code);
+        var s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        try { document.execCommand("copy"); done(); } catch (e) {}
+      }
+    });
+  })();
+  </script>
   <div class="req" id="req">
     <h2>Requirements</h2>
     <p class="req-lead">The binary is self-contained, but it links a few system libraries. Install these first or the first run fails with a missing-library error.</p>
