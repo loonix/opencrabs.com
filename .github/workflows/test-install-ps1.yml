@@ -1,9 +1,19 @@
 name: test install.ps1
 
 on:
+  pull_request:
+    paths:
+      - 'src/root-files/install.ps1'
+      - '.github/workflows/test-install-ps1.yml'
   push:
-    branches: [test/install-ps1]
+    branches: [main]
+    paths:
+      - 'src/root-files/install.ps1'
+      - '.github/workflows/test-install-ps1.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   windows:
