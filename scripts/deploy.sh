@@ -4,6 +4,7 @@
 # Usage:
 #   scripts/deploy.sh                build, push, deploy
 #   scripts/deploy.sh --docs         rebuild the docs book first (mdbook + OG previews)
+#   scripts/deploy.sh --og           regenerate the landing Open Graph cards first
 #   scripts/deploy.sh --skip-build   deploy the image already on Docker Hub
 #   scripts/deploy.sh --dry-run      print every step, change nothing
 #
@@ -18,6 +19,10 @@
 # docs/book into nginx, so rebuild the book locally (--docs) whenever the docs
 # changed. og_previews.py needs macOS Chrome and sips, so it can only run on
 # this machine and never inside the Linux image build.
+#
+# The landing preview cards work the same way: --og runs og_landing.py, which
+# also needs Chrome and sips, and the rewritten tags plus the JPEGs are
+# committed. CI only ever ships what is committed.
 set -euo pipefail
 
 IMAGE="opencrabs/landing:latest"
@@ -35,14 +40,16 @@ REMOTE_CMDS="cd ${SERVER_DIR} && git pull --ff-only && cd src/docker && docker c
 
 BUILD=1
 DOCS=0
+OG=0
 DRY_RUN=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --docs) DOCS=1 ;;
+        --og) OG=1 ;;
         --skip-build) BUILD=0 ;;
         --dry-run) DRY_RUN=1 ;;
-        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^$/p' "$0"; exit 0 ;;
         *) echo "deploy: unknown option '$1'" >&2; exit 2 ;;
     esac
     shift
@@ -76,6 +83,12 @@ fi
 if [ "$DOCS" = 1 ]; then
     step "Rebuilding the docs book (mdbook + per-page OG previews)"
     run "bash docs/build-all.sh"
+fi
+
+if [ "$OG" = 1 ]; then
+    step "Regenerating the landing Open Graph cards"
+    run "python3 scripts/og_landing.py"
+    run "python3 scripts/og_landing.py --check"
 fi
 
 step "Docker Hub login as $REGISTRY_USER"
