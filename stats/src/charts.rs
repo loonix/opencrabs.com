@@ -318,6 +318,68 @@ pub fn HourBars(points: Vec<HourlyPoint>) -> impl IntoView {
     }
 }
 
+/// One bar per day for a single count series: distinct IPs or distinct clients.
+///
+/// The two charts differ only in which field they read and what they say, so
+/// they share this builder instead of being copy-pasted and drifting apart.
+fn count_bars(
+    points: Vec<DailyPoint>,
+    pick: fn(&DailyPoint) -> u64,
+    color: &'static str,
+    legend: &'static str,
+    aria: &'static str,
+) -> impl IntoView {
+    let values: Vec<u64> = points.iter().map(pick).collect();
+    let max = scale_max(&values);
+    let count = values.len();
+    let peak = values.iter().copied().max().unwrap_or(0);
+    let axis = points.clone();
+
+    view! {
+        <svg viewBox=format!("0 0 {W} {H}") role="img"
+            aria-label=format!("{aria}, peak {}", thousands(peak))>
+            <Grid max=max format=compact/>
+            {points.into_iter().enumerate().map(|(i, p)| {
+                let value = pick(&p);
+                let (x, w) = slot(i, count);
+                let h = bar_height(value, max);
+                let y = PAD_T + plot_h() - h;
+                view! {
+                    <rect x=x y=y width=w height=h fill=color rx="1.5">
+                        <title>{format!("{} {}", thousands(value), legend)}</title>
+                    </rect>
+                }
+            }).collect_view()}
+            <DateAxis points=axis/>
+        </svg>
+        <Legend items=vec![(color, format!("{legend}, peak {}", thousands(peak)))]/>
+    }
+}
+
+/// Distinct caller IPs per day.
+#[component]
+pub fn UniqueIpsBars(points: Vec<DailyPoint>) -> impl IntoView {
+    count_bars(
+        points,
+        |p| p.unique_ips,
+        "#3b6ea8",
+        "unique IPs",
+        "Unique caller IPs per day",
+    )
+}
+
+/// Distinct client labels per day.
+#[component]
+pub fn UniqueClientsBars(points: Vec<DailyPoint>) -> impl IntoView {
+    count_bars(
+        points,
+        |p| p.unique_clients,
+        "#5aa9a3",
+        "unique clients",
+        "Unique clients per day",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -358,6 +420,28 @@ mod tests {
     fn short_date_trims_to_month_and_day() {
         assert_eq!(short_date("2026-10-19"), "10-19");
         assert_eq!(short_date("bad"), "bad");
+    }
+
+    #[test]
+    fn caller_count_series_scale_independently_of_requests() {
+        let day = |requests, ips, clients| DailyPoint {
+            date: "2026-10-19".to_string(),
+            requests,
+            input_tokens: 0,
+            output_tokens: 0,
+            cached_tokens: 0,
+            median_latency_ms: 0,
+            unique_ips: ips,
+            unique_clients: clients,
+        };
+        let points = vec![day(9_000, 3, 2), day(500, 40, 12)];
+        let ips: Vec<u64> = points.iter().map(|p| p.unique_ips).collect();
+        let clients: Vec<u64> = points.iter().map(|p| p.unique_clients).collect();
+        // The busiest request day is the quietest caller day, so a chart scaled
+        // off requests would draw these bars inside out.
+        assert_eq!(scale_max(&ips), 40);
+        assert_eq!(scale_max(&clients), 12);
+        assert!(bar_height(ips[1], scale_max(&ips)) > bar_height(ips[0], scale_max(&ips)));
     }
 
     #[test]

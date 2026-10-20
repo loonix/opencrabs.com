@@ -11,12 +11,17 @@ mod charts;
 mod chrome;
 mod format;
 
-use charts::{CacheLine, HourBars, RequestsBars, TokenBars};
+use charts::{CacheLine, HourBars, RequestsBars, TokenBars, UniqueClientsBars, UniqueIpsBars};
 use format::{compact, pct, thousands, uptime};
 
 /// Snapshot schema this build understands. A newer file is refused rather than
 /// half-rendered, because a renamed field would otherwise show as a zero.
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = 2;
+
+/// Oldest schema still readable. Schema 1 predates the distinct-caller counts,
+/// so a schema 1 file renders without them instead of failing outright. That
+/// keeps the page up while the proxy's timer catches up after a deploy.
+const MIN_SCHEMA: u32 = 1;
 
 /// A snapshot older than this is reported as stale. The timer runs every five
 /// minutes, so this tolerates several missed runs before crying wolf.
@@ -43,6 +48,12 @@ pub struct Totals {
     pub cache_hit_pct: f64,
     pub reasoning_tokens: u64,
     pub median_latency_ms: u64,
+    /// Distinct caller IPs, a count only. Absent in schema 1.
+    #[serde(default)]
+    pub unique_ips: u64,
+    /// Distinct client labels, a count only. Absent in schema 1.
+    #[serde(default)]
+    pub unique_clients: u64,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -53,6 +64,10 @@ pub struct Window {
     pub cached_tokens: u64,
     pub cache_hit_pct: f64,
     pub median_latency_ms: u64,
+    #[serde(default)]
+    pub unique_ips: u64,
+    #[serde(default)]
+    pub unique_clients: u64,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -70,6 +85,10 @@ pub struct DailyPoint {
     pub output_tokens: u64,
     pub cached_tokens: u64,
     pub median_latency_ms: u64,
+    #[serde(default)]
+    pub unique_ips: u64,
+    #[serde(default)]
+    pub unique_clients: u64,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -113,13 +132,69 @@ impl Range {
         }
     }
 
-    fn window<'a>(self, snap: &'a Snapshot) -> &'a Window {
+    /// The five headline numbers for this range. `All` reads the lifetime
+    /// totals, the rest read their own rolling window, so the cards and the
+    /// charts always describe the same slice of time.
+    fn metrics(self, snap: &Snapshot) -> Metrics {
         match self {
-            Range::Day => &snap.windows.h24,
-            Range::Week => &snap.windows.d7,
-            Range::Month | Range::All => &snap.windows.d30,
+            Range::All => Metrics {
+                requests: snap.totals.requests,
+                input_tokens: snap.totals.input_tokens,
+                output_tokens: snap.totals.output_tokens,
+                cached_tokens: snap.totals.cached_tokens,
+                cache_hit_pct: snap.totals.cache_hit_pct,
+                median_latency_ms: snap.totals.median_latency_ms,
+                reasoning_tokens: Some(snap.totals.reasoning_tokens),
+                unique_ips: snap.totals.unique_ips,
+                unique_clients: snap.totals.unique_clients,
+            },
+            other => {
+                let w = match other {
+                    Range::Day => &snap.windows.h24,
+                    Range::Week => &snap.windows.d7,
+                    _ => &snap.windows.d30,
+                };
+                Metrics {
+                    requests: w.requests,
+                    input_tokens: w.input_tokens,
+                    output_tokens: w.output_tokens,
+                    cached_tokens: w.cached_tokens,
+                    cache_hit_pct: w.cache_hit_pct,
+                    median_latency_ms: w.median_latency_ms,
+                    // The windows carry no reasoning split; only totals do.
+                    reasoning_tokens: None,
+                    unique_ips: w.unique_ips,
+                    unique_clients: w.unique_clients,
+                }
+            }
         }
     }
+
+    /// How a card reads the range it is showing.
+    fn span(self) -> &'static str {
+        match self {
+            Range::Day => "in the last 24 hours",
+            Range::Week => "in the last 7 days",
+            Range::Month => "in the last 30 days",
+            Range::All => "lifetime",
+        }
+    }
+}
+
+/// The headline numbers for one range, so the cards can follow the picker.
+#[derive(Clone, Debug, Default)]
+struct Metrics {
+    requests: u64,
+    input_tokens: u64,
+    output_tokens: u64,
+    cached_tokens: u64,
+    cache_hit_pct: f64,
+    median_latency_ms: u64,
+    reasoning_tokens: Option<u64>,
+    /// Distinct caller IPs for the same slice. A count, never the addresses.
+    unique_ips: u64,
+    /// Distinct client labels for the same slice. A count, never the labels.
+    unique_clients: u64,
 }
 
 fn main() {
@@ -141,9 +216,9 @@ fn App() -> impl IntoView {
             .json()
             .await
             .map_err(|e| format!("the stats file is not valid JSON: {e}"))?;
-        if snap.schema != SCHEMA {
+        if snap.schema > SCHEMA || snap.schema < MIN_SCHEMA {
             return Err(format!(
-                "this page understands schema {SCHEMA}, the file is schema {}",
+                "this page understands schema {MIN_SCHEMA} to {SCHEMA}, the file is schema {}",
                 snap.schema
             ));
         }
@@ -160,8 +235,9 @@ fn App() -> impl IntoView {
                 <h1><span class="stats-logo">OpenCrabs</span> " provider stats"</h1>
             </div>
             <p class="stats-sub">
-                "Live usage of the OpenCrabs inference endpoint. Requests, tokens, cache and latency, "
-                "refreshed every five minutes. No routing, upstream or per-caller detail is published."
+                "Live usage of the OpenCrabs inference endpoint. Requests, tokens, cache, latency "
+                "and how many distinct callers showed up, refreshed every five minutes. No routing, "
+                "upstream or per-caller detail is published, only counts."
             </p>
             <Suspense fallback=|| view! { <Loading/> }>
                 {move || Suspend::new(async move {
@@ -206,8 +282,8 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
         .history_since
         .clone()
         .unwrap_or_else(|| "no data yet".to_string());
-    let totals = snap.totals.clone();
-    let snap_for_cards = snap.clone();
+    let snap_cards = snap.clone();
+    let since_cards = since.clone();
     let caps = snap.capabilities.clone();
     let daily = snap.daily.clone();
     let hourly = snap.hourly.clone();
@@ -237,18 +313,31 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
             None
         }}
 
-        <div class="stats-cards">
-            <Card k="Requests" v=thousands(totals.requests)
-                s=format!("{} in the last 24h", thousands(snap_for_cards.windows.h24.requests))/>
-            <Card k="Input tokens" v=compact(totals.input_tokens)
-                s=format!("{} cached", compact(totals.cached_tokens))/>
-            <Card k="Output tokens" v=compact(totals.output_tokens)
-                s=format!("{} reasoning", compact(totals.reasoning_tokens))/>
-            <Card k="Cache hit" v=pct(totals.cache_hit_pct)
-                s=format!("{} in the last 24h", pct(snap_for_cards.windows.h24.cache_hit_pct))/>
-            <Card k="Median latency" v=uptime(totals.median_latency_ms)
-                s=format!("{} in the last 24h", uptime(snap_for_cards.windows.h24.median_latency_ms))/>
-        </div>
+        {move || {
+            let r = range.get();
+            let m = r.metrics(&snap_cards);
+            let span = if r == Range::All {
+                format!("since {since_cards}")
+            } else {
+                r.span().to_string()
+            };
+            let reasoning = match m.reasoning_tokens {
+                Some(t) => format!("{} reasoning", compact(t)),
+                None => span.clone(),
+            };
+            view! {
+                <div class="stats-cards">
+                    <Card k="Requests" v=thousands(m.requests) s=span.clone()/>
+                    <Card k="Input tokens" v=compact(m.input_tokens)
+                        s=format!("{} cached", compact(m.cached_tokens))/>
+                    <Card k="Output tokens" v=compact(m.output_tokens) s=reasoning/>
+                    <Card k="Cache hit" v=pct(m.cache_hit_pct) s=span.clone()/>
+                    <Card k="Median latency" v=uptime(m.median_latency_ms) s=span.clone()/>
+                    <Card k="Unique IPs" v=thousands(m.unique_ips) s=span.clone()/>
+                    <Card k="Unique clients" v=thousands(m.unique_clients) s=span/>
+                </div>
+            }
+        }}
 
         <div class="stats-cards">
             {caps.into_iter().map(|c| {
@@ -269,14 +358,16 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
             let days = r.days(daily.len());
             let start = daily.len().saturating_sub(days);
             let slice = daily[start..].to_vec();
-            let w = r.window(&snap).clone();
+            let m = r.metrics(&snap);
             let totals_line = format!(
-                "{} requests, {} in / {} out, {} cache hit, median {}",
-                thousands(w.requests),
-                compact(w.input_tokens),
-                compact(w.output_tokens),
-                pct(w.cache_hit_pct),
-                uptime(w.median_latency_ms),
+                "{} requests, {} in / {} out, {} cache hit, median {}, {} unique IPs, {} unique clients",
+                thousands(m.requests),
+                compact(m.input_tokens),
+                compact(m.output_tokens),
+                pct(m.cache_hit_pct),
+                uptime(m.median_latency_ms),
+                thousands(m.unique_ips),
+                thousands(m.unique_clients),
             );
             view! {
                 <div class="stats-meta" style="margin-bottom:18px">
@@ -292,6 +383,14 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
                         <TokenBars points=slice.clone()/>
                     </section>
                     <section class="stats-chart">
+                        <h2>"Unique IPs per day"</h2>
+                        <UniqueIpsBars points=slice.clone()/>
+                    </section>
+                    <section class="stats-chart">
+                        <h2>"Unique clients per day"</h2>
+                        <UniqueClientsBars points=slice.clone()/>
+                    </section>
+                    <section class="stats-chart">
                         <h2>"Cache hit rate per day"</h2>
                         <CacheLine points=slice/>
                     </section>
@@ -304,8 +403,10 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
         }}
 
         <p class="stats-note">
-            "Every figure is an aggregate of the last 90 days of proxy records. Providers, upstreams, "
-            "callers, keys and failures are never published. Times are UTC."
+            "Every figure is an aggregate of the last 90 days of proxy records. Unique IPs and unique "
+            "clients are counts only: no address, key or label is ever published. A rotating mobile "
+            "address can inflate the IP count and a shared office address can deflate it, so read it "
+            "as reach rather than a headcount. Times are UTC."
         </p>
     }
 }

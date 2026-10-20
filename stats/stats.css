@@ -101,6 +101,9 @@
 }
 
 .stats-card {
+    /* A grid child defaults to min-width:auto, so one long value can widen the
+       track past the viewport. This keeps the card inside its column. */
+    min-width: 0;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -171,6 +174,7 @@
 }
 
 .stats-chart {
+    min-width: 0;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -298,5 +302,15 @@
     }
     .stats-card .v {
         font-size: 1.3rem;
+    }
+    /* Two 190px tracks plus the 14px gap need 394px before padding, which is
+       wider than a 390px phone, so the auto-fit grid used to push the whole
+       page sideways and clip every right-hand card. One full-width column. */
+    .stats-cards {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+    }
+    .stats-chart {
+        padding: 14px;
     }
 }
