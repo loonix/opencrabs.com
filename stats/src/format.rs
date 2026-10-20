@@ -158,7 +158,10 @@ mod tests {
         // 2026-10-19T23:32:36Z
         assert_eq!(parse_rfc3339("2026-10-19T23:32:36Z"), Some(1_792_452_756));
         assert_eq!(parse_rfc3339("1970-01-01T00:00:00Z"), Some(0));
-        assert_eq!(parse_rfc3339("2026-10-19T23:32:36.123Z"), Some(1_792_452_756));
+        assert_eq!(
+            parse_rfc3339("2026-10-19T23:32:36.123Z"),
+            Some(1_792_452_756)
+        );
         assert_eq!(parse_rfc3339("not a date"), None);
     }
 
