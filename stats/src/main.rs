@@ -287,6 +287,14 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
     let caps = snap.capabilities.clone();
     let daily = snap.daily.clone();
     let hourly = snap.hourly.clone();
+    // A schema 1 snapshot carries no caller counts at all, so serde fills them
+    // with 0. Printing that zero would publish a number nobody measured, so the
+    // caller cards and charts only appear once the exporter counts callers.
+    let has_callers = snap.schema >= 2;
+    // A schema 1 file has no caller counts, so serde fills them with 0.
+    // Printing that zero would publish a number nobody measured, so the
+    // caller cards and charts only appear once the exporter counts callers.
+    let has_callers = snap.schema >= 2;
 
     view! {
         <div class="stats-meta">
@@ -325,6 +333,15 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
                 Some(t) => format!("{} reasoning", compact(t)),
                 None => span.clone(),
             };
+            let caller_cards = if has_callers {
+                view! {
+                    <Card k="Unique IPs" v=thousands(m.unique_ips) s=span.clone()/>
+                    <Card k="Unique clients" v=thousands(m.unique_clients) s=span.clone()/>
+                }
+                .into_any()
+            } else {
+                ().into_any()
+            };
             view! {
                 <div class="stats-cards">
                     <Card k="Requests" v=thousands(m.requests) s=span.clone()/>
@@ -333,8 +350,10 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
                     <Card k="Output tokens" v=compact(m.output_tokens) s=reasoning/>
                     <Card k="Cache hit" v=pct(m.cache_hit_pct) s=span.clone()/>
                     <Card k="Median latency" v=uptime(m.median_latency_ms) s=span.clone()/>
-                    <Card k="Unique IPs" v=thousands(m.unique_ips) s=span.clone()/>
-                    <Card k="Unique clients" v=thousands(m.unique_clients) s=span/>
+                    {has_callers.then(|| view! {
+                        <Card k="Unique IPs" v=thousands(m.unique_ips) s=span.clone()/>
+                        <Card k="Unique clients" v=thousands(m.unique_clients) s=span/>
+                    })}
                 </div>
             }
         }}
@@ -359,16 +378,21 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
             let start = daily.len().saturating_sub(days);
             let slice = daily[start..].to_vec();
             let m = r.metrics(&snap);
-            let totals_line = format!(
-                "{} requests, {} in / {} out, {} cache hit, median {}, {} unique IPs, {} unique clients",
+            let mut totals_line = format!(
+                "{} requests, {} in / {} out, {} cache hit, median {}",
                 thousands(m.requests),
                 compact(m.input_tokens),
                 compact(m.output_tokens),
                 pct(m.cache_hit_pct),
                 uptime(m.median_latency_ms),
-                thousands(m.unique_ips),
-                thousands(m.unique_clients),
             );
+            if has_callers {
+                totals_line.push_str(&format!(
+                    ", {} unique IPs, {} unique clients",
+                    thousands(m.unique_ips),
+                    thousands(m.unique_clients),
+                ));
+            }
             view! {
                 <div class="stats-meta" style="margin-bottom:18px">
                     <span class="stats-pill">{totals_line}</span>
@@ -382,14 +406,16 @@ fn Dashboard(snap: Snapshot, range: RwSignal<Range>) -> impl IntoView {
                         <h2>"Tokens per day"</h2>
                         <TokenBars points=slice.clone()/>
                     </section>
-                    <section class="stats-chart">
-                        <h2>"Unique IPs per day"</h2>
-                        <UniqueIpsBars points=slice.clone()/>
-                    </section>
-                    <section class="stats-chart">
-                        <h2>"Unique clients per day"</h2>
-                        <UniqueClientsBars points=slice.clone()/>
-                    </section>
+                    {has_callers.then(|| view! {
+                        <section class="stats-chart">
+                            <h2>"Unique IPs per day"</h2>
+                            <UniqueIpsBars points=slice.clone()/>
+                        </section>
+                        <section class="stats-chart">
+                            <h2>"Unique clients per day"</h2>
+                            <UniqueClientsBars points=slice.clone()/>
+                        </section>
+                    })}
                     <section class="stats-chart">
                         <h2>"Cache hit rate per day"</h2>
                         <CacheLine points=slice/>
