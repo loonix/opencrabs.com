@@ -5,3 +5,8 @@ services:
     ports:
       - "19283:19283"
     restart: unless-stopped
+    volumes:
+      # The public stats snapshot, written on this host by
+      # keyproxy-public-stats.timer. Read-only: nginx serves it, nothing in the
+      # container may write to it.
+      - /srv/opencrabs/stats:/usr/share/nginx/html/stats-data:ro
