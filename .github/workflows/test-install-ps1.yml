@@ -1,0 +1,65 @@
+name: test install.ps1
+
+on:
+  pull_request:
+    paths:
+      - 'src/root-files/install.ps1'
+      - '.github/workflows/test-install-ps1.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/root-files/install.ps1'
+      - '.github/workflows/test-install-ps1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: parse
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/src/root-files/install.ps1", [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { $_.Message }
+            exit 1
+          }
+          'PARSE OK'
+
+      - name: dry run
+        shell: pwsh
+        run: ./src/root-files/install.ps1 -DryRun
+
+      - name: real install
+        shell: pwsh
+        run: ./src/root-files/install.ps1 -Dir "$env:RUNNER_TEMP\oc" -NoPathUpdate
+
+      - name: run the installed binary
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP\oc\opencrabs.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "opencrabs --version exited $LASTEXITCODE" }
+          Get-ChildItem "$env:RUNNER_TEMP\oc" | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: pinned version without the v prefix + PATH update
+        shell: pwsh
+        run: |
+          ./src/root-files/install.ps1 -Version 0.5.11 -Dir "$env:RUNNER_TEMP\oc2"
+          $raw = (Get-Item HKCU:\Environment).GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+          "user PATH now: $raw"
+          if ($raw -notlike "*$env:RUNNER_TEMP\oc2*") { throw 'the user PATH was not updated' }
+          & "$env:RUNNER_TEMP\oc2\opencrabs.exe" --version
+
+      - name: iex pattern
+        shell: pwsh
+        run: |
+          $src = Get-Content ./src/root-files/install.ps1 -Raw
+          Invoke-Expression $src
+          & ([scriptblock]::Create($src)) -DryRun
