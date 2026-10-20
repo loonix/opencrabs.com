@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenCrabs Provider Stats — Public Usage</title>
+    <meta name="description" content="Live public usage of the OpenCrabs inference provider: requests, tokens, cache hit rate and latency. No routing or upstream detail." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://opencrabs.com/stats/" />
+    <meta name="theme-color" content="#d76414" />
+    <link rel="icon" type="image/x-icon" href="/public/favicon.ico?v=2" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon.png?v=2" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://opencrabs.com/stats/" />
+    <meta property="og:title" content="OpenCrabs Provider Stats" />
+    <meta property="og:description" content="Live public usage of the OpenCrabs inference provider: requests, tokens, cache hit rate and latency." />
+    <meta property="og:site_name" content="OpenCrabs" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- The landing palette lives in ../style.css; Trunk.toml copies it in
+         before the build so the two pages share one set of colours. -->
+    <link data-trunk rel="css" href="style.css" />
+    <link data-trunk rel="css" href="stats.css" />
+    <link data-trunk rel="rust" data-wasm-opt="z" />
+</head>
+<body class="stats-page">
+    <div id="app"></div>
+</body>
+</html>

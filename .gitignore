@@ -11,3 +11,6 @@ docs/po/tier1_msgids.json
 
 # msgmerge backups
 docs/po/*.po~
+
+# copied from ../style.css by the stats Trunk pre_build hook
+stats/style.css

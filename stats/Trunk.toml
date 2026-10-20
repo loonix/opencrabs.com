@@ -1,0 +1,15 @@
+[build]
+target = "index.html"
+dist = "dist"
+# The bundle is served from https://opencrabs.com/stats/, not from the site
+# root, so every hashed asset URL must carry that prefix. Without this Trunk
+# emits /stats-<hash>.js and the page 404s on load.
+public_url = "/stats/"
+
+[serve]
+port = 19284
+
+[[hooks]]
+stage = "pre_build"
+command = "sh"
+command_arguments = ["-c", "cp ../style.css ./style.css"]

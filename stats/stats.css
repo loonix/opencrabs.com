@@ -1,0 +1,302 @@
+/* Public stats page. Reuses the landing palette so the two pages read as one
+   site; only the layout pieces that page does not have live here. */
+
+.stats-page {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Only the dashboard body: the nav and footer come from the landing stylesheet
+   and must keep their own colours. */
+.stats-wrap a {
+    color: var(--accent-soft);
+    text-decoration: none;
+}
+
+.stats-wrap a:hover {
+    text-decoration: underline;
+}
+
+.stats-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 96px 24px 64px;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.stats-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px 20px;
+    margin-bottom: 8px;
+}
+
+.stats-head h1 {
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.stats-head .stats-logo {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.stats-sub {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0 0 28px;
+    max-width: 62ch;
+}
+
+.stats-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+}
+
+.stats-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+}
+
+.stats-pill.live::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+}
+
+.stats-pill.stale {
+    border-color: #5a4a1a;
+    color: #d9b44a;
+}
+
+/* ── Cards ──────────────────────────────────────────────────── */
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 34px;
+}
+
+.stats-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+}
+
+.stats-card .k {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.stats-card .v {
+    font-family: var(--font-mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+.stats-card .s {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* ── Range selector ─────────────────────────────────────────── */
+.stats-ranges {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 26px;
+}
+
+.stats-ranges button {
+    appearance: none;
+    border: 0;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 8px 18px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.stats-ranges button + button {
+    border-left: 1px solid var(--border);
+}
+
+.stats-ranges button:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.stats-ranges button.on {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* ── Charts ─────────────────────────────────────────────────── */
+.stats-charts {
+    display: grid;
+    gap: 18px;
+}
+
+.stats-chart {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.stats-chart h2 {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin: 0 0 14px;
+}
+
+.stats-chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
+
+.stats-chart .axis {
+    fill: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+
+.stats-chart .grid {
+    stroke: var(--border);
+    stroke-width: 1;
+}
+
+.stats-chart .bar {
+    fill: var(--accent);
+}
+
+.stats-chart .bar-in {
+    fill: #3b6ea8;
+}
+
+.stats-chart .bar-out {
+    fill: var(--green);
+}
+
+.stats-chart .line {
+    fill: none;
+    stroke: var(--accent-soft);
+    stroke-width: 2;
+    stroke-linejoin: round;
+}
+
+.stats-chart .dot {
+    fill: var(--accent-soft);
+}
+
+.stats-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-top: 10px;
+}
+
+.stats-legend i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.stats-legend .k-in {
+    background: #3b6ea8;
+}
+
+.stats-legend .k-out {
+    background: var(--green);
+}
+
+.stats-legend .k-cache {
+    background: var(--accent-soft);
+}
+
+/* ── States ─────────────────────────────────────────────────── */
+.stats-state {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-card);
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.stats-state strong {
+    display: block;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.stats-note {
+    margin-top: 34px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+}
+
+.stats-foot {
+    margin-top: 14px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+@media (max-width: 620px) {
+    .stats-wrap {
+        padding: 72px 16px 48px;
+    }
+    .stats-head h1 {
+        font-size: 1.5rem;
+    }
+    .stats-card .v {
+        font-size: 1.3rem;
+    }
+}

@@ -14,8 +14,16 @@ COPY docs/ docs/
 
 RUN trunk build --release
 
+# The public usage dashboard is a separate crate with its own Cargo.lock. It is
+# static output only: the page fetches /stats-data/public.json, which the host
+# writes every five minutes and compose mounts in read-only.
+COPY stats/Cargo.toml stats/Cargo.lock stats/Trunk.toml stats/index.html stats/stats.css /app/stats/
+COPY stats/src/ /app/stats/src/
+RUN cd /app/stats && trunk build --release
+
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/stats/dist /usr/share/nginx/html/stats
 COPY --from=builder /app/src/root-files/ /usr/share/nginx/html/
 COPY --from=builder /app/docs/book /usr/share/nginx/html/docs
 COPY src/docker/nginx.conf /etc/nginx/conf.d/default.conf
